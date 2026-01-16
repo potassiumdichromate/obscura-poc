@@ -152,7 +152,19 @@ Alice uploads property details (address, valuation, ownership documents) and min
 - **Real AES-256-GCM encryption** (not mock): Protects sensitive property data
 - **IPFS storage**: Decentralized, immutable off-chain storage
 - **On-chain IPFS CID**: Blockchain stores reference to encrypted data
-- **FungibleAsset with amount=1**: Creates unique property token (NFT pattern in Miden v0.12)
+- **FungibleAsset with amount=1**: Emulates NFT behavior due to Miden v0.12 limitations
+
+**Important Clarification - NFT Emulation:**
+
+We use `FungibleAsset(amount=1)` instead of `NonFungibleAsset` because **Miden SDK v0.12 does not yet provide NonFungibleAsset or NonFungibleFaucet types**. This is a platform limitation, not our design choice.
+
+**How we achieve uniqueness:**
+1. Each property minted with exactly `amount=1` (non-divisible)
+2. Unique note inputs (property_hash + IPFS CID) distinguish each property
+3. Each note gets a unique note_id calculated from its contents
+4. Functionally operates as NFT even though technically using FungibleAsset type
+
+**Future migration:** When Miden releases NonFungibleAsset (expected v0.13+), we can migrate to proper NFT implementation with native uniqueness guarantees.
 
 ### Code Implementation
 
@@ -494,10 +506,35 @@ Bob generates REAL STARK proof of accreditation (net worth ≥ threshold) withou
 
 ### Implementation Approach
 
-**Why this approach?**
-- REAL STARK proof using Miden VM
-- Proves inequality without revealing value
-- Zero-knowledge: verifier learns only true/false
+**IMPORTANT - Transparency About ZK Proofs:**
+
+The STARK proofs we generate are **cryptographically real and valid** - they use Miden VM's actual proof system. However, there are critical clarifications:
+
+**What IS Real:**
+- ✅ STARK proof generation using Miden VM
+- ✅ MASM program compilation and execution
+- ✅ Cryptographic proof verification
+- ✅ Zero-knowledge property (actual value hidden in proof)
+
+**Current Limitations - Be Aware:**
+- ⚠️ **User provides the input values**: The `net_worth` comes from the API request (user's self-reported claim)
+- ⚠️ **No external validation**: We do NOT verify the user actually has the claimed net worth
+- ⚠️ **Local verification**: Proof verification happens in our API server (not on-chain currently, though Miden supports on-chain verification)
+
+**What The Proof Actually Proves:**
+- Proves: "IF the user has net_worth ≥ threshold, THEN this cryptographic proof is valid"
+- Does NOT prove: "The user actually possesses this net_worth"
+- Zero-knowledge still works: Verifier learns only pass/fail, not the exact net worth value
+
+**Production Requirements:**
+To make this production-ready, you would need:
+1. Integration with financial institutions or KYC providers to verify actual net worth
+2. Oracle system to provide verified financial data to the proof generation
+3. Optional: Move verification on-chain using Miden's smart contracts
+4. Tamper-proof data sources instead of user self-reporting
+
+**Current Value:**
+This implementation demonstrates the ZK proof mechanics and privacy-preserving verification pattern. It's a foundation showing how zero-knowledge proofs work, ready to be connected to real data sources.
 
 ### Code Implementation
 
@@ -594,7 +631,15 @@ Proof HIDES: net_worth = 5000000 (actual value)
 ## Step 10: Bob Generates Jurisdiction Proof
 
 ### Feature Description
-Bob proves he's NOT from restricted countries without revealing his country.
+Bob generates a cryptographically valid STARK proof demonstrating he's NOT from restricted countries, without revealing his actual country.
+
+**Important Transparency Note:**
+- The STARK proof mechanism is real and uses Miden VM
+- The `country_code` input is **user-provided** (Bob claims via API request)
+- We do NOT verify Bob's actual location/jurisdiction with external services
+- Proof verification currently happens in our server (local verification)
+- For production: Would integrate with KYC providers to verify actual jurisdiction
+- Miden supports on-chain verification which could be enabled
 
 ### Code Implementation
 
@@ -813,6 +858,22 @@ POST /api/v1/bob/lock-funds
   "escrow_account_id": "0x9f8e7d6c5b4a39281706f5e4d3c2b1a0"
 }
 ```
+
+---
+
+## Continue to Part 2
+
+Part 2 covers:
+- Steps 14-19 (Platform Verification & Proof Dashboard)
+- Complete API reference
+- Technology stack
+- Production deployment guide
+
+---
+
+*Part 1 of 2*  
+*Last Updated: January 17, 2025*
+
 # Obscura Platform - Implementation Guide (Part 2)
 
 ## Continuation from Part 1
@@ -1125,15 +1186,58 @@ GET /api/v1/platform/verify-compliance/offer-770f9622-g4bd-63f6-c938-66887766222
 ## Step 18: Platform Executes Atomic Settlement
 
 ### Feature Description
-Platform executes atomic settlement where both fund transfer and ownership transfer happen simultaneously and irreversibly.
+Platform executes settlement through two **sequential** blockchain transactions: fund transfer followed by ownership transfer. Both transactions must complete successfully for the settlement to be marked as complete.
+
+**CRITICAL CLARIFICATION - NOT Truly Atomic:**
+
+Our current implementation is **NOT truly atomic** at the blockchain protocol level. Here's the honest explanation:
+
+**What We Actually Do (Sequential Process):**
+1. Execute fund transfer transaction → Wait for confirmation (~30s)
+2. Execute ownership transfer transaction → Wait for confirmation (~30s)  
+3. If both succeed → Mark settlement as complete
+4. If either fails → Record failure and require manual intervention
+
+**Why This Is NOT Atomic:**
+- ❌ Two separate blockchain transactions (not bundled into one)
+- ❌ Possible partial state: TX1 succeeds but TX2 fails
+- ❌ No automatic rollback if second transaction fails
+- ❌ Time gap between transactions (~30-60 seconds)
+
+**What True Atomicity Would Be:**
+- ✅ Single blockchain transaction containing both transfers
+- ✅ Both succeed or both automatically revert
+- ✅ No intermediate state possible
+- ✅ Instant completion (one confirmation, not two)
+
+**Why We Use Sequential:**
+Miden's `TransactionRequestBuilder` with atomic multi-transfer support was expected in v0.13, but **as of our latest verification, this feature is not yet available**. We're working within current SDK capabilities.
+
+**What We DO Have (Risk Mitigation):**
+- ✅ Escrow pattern (funds locked before settlement starts)
+- ✅ Status tracking at each step
+- ✅ Both transaction IDs recorded for verification
+- ✅ Error handling and alerts if issues occur
+- ✅ Manual reconciliation procedures if needed
 
 ### Implementation Approach
 
-**Why this approach?**
-- **Atomicity:** Both transfers succeed or both fail (no partial state)
-- **Escrow Release:** Funds released to seller
-- **Ownership Transfer:** Property NFT transferred to buyer
-- **On-Chain Finality:** Irreversible blockchain transactions
+**Why sequential transactions?**
+- Works within current Miden SDK v0.12 capabilities
+- Provides clear transaction IDs for both transfers
+- Enables step-by-step verification
+- Foundation ready for true atomic implementation when Miden adds support
+- Escrow pattern provides security despite sequential nature
+
+**Future Migration Path:**
+When Miden releases atomic transaction bundling (expected v0.13+):
+```rust
+// Future: Single atomic transaction
+let mut tx_builder = TransactionRequestBuilder::new();
+tx_builder.add_asset_transfer(escrow, seller, funds);
+tx_builder.add_asset_transfer(seller, buyer, property);
+let atomic_tx = client.submit_new_transaction(escrow_id, tx_builder.build()?).await?;
+```
 
 ### Code Implementation
 
@@ -1287,76 +1391,71 @@ POST /api/v1/platform/execute-settlement
 
 ### Technical Details
 
-1. **Atomic Settlement Guarantee:**
+1. **Sequential Settlement Process:**
    ```rust
-   // Pseudocode of ideal atomic implementation
-   transaction {
-       // Step 1: Release escrow
-       escrow.release_funds(seller);
+   // Current implementation - two separate transactions
+   async fn execute_settlement() -> Result<Settlement> {
+       // Transaction 1: Release funds from escrow
+       let funds_tx_id = release_escrow_funds(escrow, seller).await?;
+       settlement.funds_transfer_tx = Some(funds_tx_id);
+       settlement.status = SettlementStatus::FundsTransferred;
        
-       // Step 2: Transfer property
-       property_nft.transfer(buyer);
+       // Transaction 2: Transfer property ownership (separate TX!)
+       let ownership_tx_id = transfer_property_note(seller, buyer).await?;
+       settlement.ownership_transfer_tx = Some(ownership_tx_id);
+       settlement.status = SettlementStatus::OwnershipTransferred;
        
-       // Both succeed or both revert
-       commit();
+       // Both completed successfully
+       settlement.status = SettlementStatus::Completed;
+       settlement.completed_at = Some(Utc::now());
+       Ok(settlement)
    }
    ```
 
-2. **Transaction Order:**
-   - Funds first (ensures seller is paid)
-   - Property second (ensures buyer receives asset)
-   - Both must succeed (atomic guarantee)
+2. **Transaction Execution Order:**
+   - **Step 1**: Funds transfer (escrow → seller)
+   - **Step 2**: Property transfer (seller → buyer)
+   - Both tracked independently with separate TX IDs
 
-3. **Failure Modes:**
-   - **Funds TX fails** → Entire settlement aborted
-   - **Ownership TX fails** → Funds TX reversed (requires rollback)
-   - **Network partition** → Retry mechanism with idempotency
+3. **Failure Scenarios & Handling:**
+   - **Funds TX fails**: Settlement aborted, no property transfer attempted, no manual cleanup needed
+   - **Ownership TX fails**: **CRITICAL ISSUE** - Funds already transferred, requires manual intervention
+   - **Network issues**: Status tracking helps identify where process stopped, can retry failed step
 
-4. **Status Lifecycle:**
+4. **Settlement Status Lifecycle:**
    ```
-   Initiated → FundsTransferred → OwnershipTransferred → Completed
-                                                      ↓
-                                                   Failed
-   ```
-
-5. **Blockchain Finality:**
-   - Miden confirmation time: ~30 seconds
-   - Both TXs verifiable on explorer
-   - Irreversible once completed
-
-6. **Production Implementation:**
-   ```rust
-   // REAL atomic settlement using Miden's transaction builder
-   let mut tx_builder = TransactionRequestBuilder::new();
+   Initiated 
+      ↓
+   FundsTransferred (TX1 complete)
+      ↓
+   OwnershipTransferred (TX2 complete)
+      ↓
+   Completed (both successful)
    
-   // Add escrow release
-   tx_builder.add_asset_transfer(
-       escrow_account_id,
-       seller_account_id,
-       Asset::Fungible(FungibleAsset::new(faucet_id, amount)?),
-   );
-   
-   // Add property transfer
-   tx_builder.add_asset_transfer(
-       seller_account_id,
-       buyer_account_id,
-       Asset::Fungible(nft_asset), // The property NFT
-   );
-   
-   // Submit atomic transaction
-   let tx = client.submit_new_transaction(
-       escrow_account_id,
-       tx_builder.build()?,
-   ).await?;
+   (Any step can transition to Failed if transaction fails)
    ```
 
-**Economic Security:** Escrow prevents:
-- Seller taking funds without transferring property
-- Buyer receiving property without paying
-- Double-spending
-- Front-running
+5. **Blockchain Confirmation Times:**
+   - Each transaction confirmation: ~30 seconds
+   - Total sequential time: ~60-90 seconds
+   - Both transactions independently verifiable on Miden explorer
 
-**Smart Contract Equivalent:** This is similar to Ethereum's atomic swap, but on Miden with ZK privacy.
+6. **Risk Comparison:**
+
+   | Aspect | Our Sequential | True Atomic |
+   |--------|---------------|-------------|
+   | Number of TXs | 2 separate | 1 bundled |
+   | Partial execution possible | ⚠️ Yes | ❌ No |
+   | Rollback if failure | ⚠️ Manual | ✅ Automatic |
+   | Verification | ✅ Two TX IDs | ✅ One TX ID |
+   | Current feasibility | ✅ Works now | ⏳ Waiting on Miden |
+
+7. **Security Through Escrow:**
+   Despite sequential execution, the escrow pattern provides security:
+   - Funds locked before settlement begins
+   - Both parties must agree to proceed
+   - Transaction history fully auditable
+   - Manual resolution path if issues occur
 
 ---
 
@@ -1700,8 +1799,6 @@ All 21 endpoints documented above:
 
 **Utility (1 endpoint):**
 23. GET /health
-
----
 
 ---
 
