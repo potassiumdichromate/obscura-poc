@@ -1,0 +1,39 @@
+begin
+    # Input stack: [threshold]
+    # Advice stack: [net_worth]
+    
+    # Load net_worth from advice
+    adv_push.1
+    # Stack: [net_worth, threshold]
+    
+    # Verify both are non-zero
+    dup.0 
+    push.0 
+    neq 
+    assert
+    
+    dup.1 
+    push.0 
+    neq 
+    assert
+    
+    # Compare: net_worth >= threshold
+    # Stack: [net_worth, threshold]
+    dup.1 dup.1
+    # Stack: [threshold, net_worth, net_worth, threshold]
+    
+    u32assert2
+    u32gte
+    # Stack: [result, net_worth, threshold]
+    
+    assert
+    # Stack: [net_worth, threshold]
+    
+    # Clean stack
+    drop drop
+    # Stack: []
+    
+    # Return success
+    push.1
+    # Stack: [1]
+end

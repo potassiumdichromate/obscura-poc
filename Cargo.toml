@@ -1,0 +1,85 @@
+[package]
+name = "miden-rust-service"
+version = "1.0.0"
+edition = "2021"
+authors = ["Obscura <sidhanth@Obscura.io>"]
+description = "Obscura × Miden: Real privacy-preserving real estate tokenization"
+
+[dependencies]
+# ============================================================================
+# Miden Core v0.12.x - WITH ALL REQUIRED FEATURES
+# ============================================================================
+miden-client = { version = "0.12", features = ["tonic"] }
+miden-client-sqlite-store = "0.12"
+miden-objects = "0.12"
+miden-lib = "0.12"
+miden-tx = "0.12"
+miden-vm = "0.12"
+miden-crypto = "0.12"
+
+# ============================================================================
+# Web Framework
+# ============================================================================
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# ============================================================================
+# Async Runtime
+# ============================================================================
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "sync", "time", "fs"] }
+
+# ============================================================================
+# Error Handling
+# ============================================================================
+anyhow = "1.0"
+thiserror = "1.0"
+
+# ============================================================================
+# Logging
+# ============================================================================
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+
+# ============================================================================
+# Crypto (REAL encryption) - FIXED: Using rand 0.9 to match miden-crypto
+# ============================================================================
+rand = "0.9"
+rand_core = "0.9"
+aes-gcm = "0.10"
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+
+# ============================================================================
+# Serialization
+# ============================================================================
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0"
+
+# ============================================================================
+# HTTP Client (REAL IPFS)
+# ============================================================================
+reqwest = { version = "0.12", features = ["json", "multipart"] }
+
+# ============================================================================
+# Time & UUID
+# ============================================================================
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+dotenv = "0.15"
+
+[lib]
+name = "miden_rust_service"
+path = "src/lib.rs"
+
+[[bin]]
+name = "miden-rust-service"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"

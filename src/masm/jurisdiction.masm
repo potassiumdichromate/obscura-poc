@@ -1,0 +1,22 @@
+begin
+    # Input stack: [restricted_count]
+    # Advice stack: [country_hash]
+    
+    # Load country_hash from advice
+    adv_push.1
+    # Stack: [country_hash, restricted_count]
+    
+    # Verify country_hash is non-zero (country exists)
+    dup.0 
+    push.0 
+    neq 
+    assert
+    
+    # Clean stack
+    drop drop
+    # Stack: []
+    
+    # Return success
+    push.1
+    # Stack: [1]
+end

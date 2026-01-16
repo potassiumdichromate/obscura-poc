@@ -1,0 +1,47 @@
+use.std::account
+
+export.mint_property_nft
+    # Get account ID
+    exec.account::get_id
+    
+    # Increment nonce for unique NFT ID
+    exec.account::incr_nonce
+    
+    # Store property hash in storage slot 1
+    push.1
+    swap.1
+    exec.account::set_item
+    drop
+    
+    # Store IPFS CID parts in storage slots 2-5
+    push.2
+    swap.1
+    exec.account::set_item
+    drop
+    
+    push.3
+    swap.1
+    exec.account::set_item
+    drop
+    
+    push.4
+    swap.1
+    exec.account::set_item
+    drop
+    
+    push.5
+    swap.1
+    exec.account::set_item
+    drop
+end
+
+export.get_property_metadata
+    push.2 exec.account::get_item
+    push.3 exec.account::get_item
+    push.4 exec.account::get_item
+    push.5 exec.account::get_item
+end
+
+export.get_property_hash
+    push.1 exec.account::get_item
+end

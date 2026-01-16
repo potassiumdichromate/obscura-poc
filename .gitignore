@@ -1,0 +1,32 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Miden
+/keystore/
+/store.sqlite3
+/store.sqlite3-shm
+/store.sqlite3-wal
+/data/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test artifacts
+/test-output/
